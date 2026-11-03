@@ -1,0 +1,32 @@
+name: capture-host-tests
+
+on:
+  push:
+    paths:
+      - "psp/**"
+      - "common/**"
+      - "tests/**"
+      - "pc/src/pixel_format.*"
+      - "pc/tests/**"
+      - ".github/workflows/host-tests.yml"
+  pull_request:
+    paths:
+      - "psp/**"
+      - "common/**"
+      - "tests/**"
+      - "pc/src/pixel_format.*"
+      - "pc/tests/**"
+      - ".github/workflows/host-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: cmake -S tests -B out/host-tests -A Win32
+      - run: cmake --build out/host-tests --config Release
+      - run: ctest --test-dir out/host-tests -C Release --output-on-failure

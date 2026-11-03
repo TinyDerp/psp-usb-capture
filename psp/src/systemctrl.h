@@ -4,6 +4,7 @@
 #define PSPCAP_SYSTEMCTRL_H
 
 #include <psptypes.h>
+#include <psploadcore.h>
 
 int sctrlHENGetVersion(void);
 int sctrlHENGetMinorVersion(void);
@@ -13,5 +14,8 @@ u32 sctrlHENFindFunction(const char *modname, const char *libname, u32 nid);
 
 // Points every syscall that targets `addr` at `newaddr` instead.
 void sctrlHENPatchSyscall(void *addr, void *newaddr);
+
+typedef int (*pspcap_module_handler)(SceModule *module);
+pspcap_module_handler sctrlHENSetStartModuleHandler(pspcap_module_handler handler);
 
 #endif

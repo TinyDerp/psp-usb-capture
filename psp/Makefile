@@ -5,7 +5,7 @@
 #   make GIT_REV=abc1234 embed a build id (CI passes the commit sha)
 
 TARGET = pspcap
-OBJS   = src/main.o src/log.o src/usb.o src/display.o src/audio.o src/session.o src/SystemCtrlForKernel.o
+OBJS   = src/main.o src/log.o src/usb.o src/display.o src/audio.o src/capture_hooks.o src/session.o src/SystemCtrlForKernel.o
 
 LOG     ?= 1
 GIT_REV ?= local

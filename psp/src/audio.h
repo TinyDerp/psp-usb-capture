@@ -9,7 +9,9 @@
 // Hooks the sceAudio output and reserve syscalls. The hooks always call the
 // original; they only copy PCM while capture is on, and then call `on_data`
 // (on the game's audio thread, with k1 = 0). Returns the number of hooked
-// functions, 0 if sceAudio_Driver is not loaded (yet).
+// available functions, 0 if sceAudio_Driver is not loaded (yet). Missing
+// optional exports do not disable the remaining hooks. Repeated calls reapply
+// patches to newly linked syscall entries without discarding channel state.
 int audio_hooks_install(void (*on_data)(void));
 void audio_hooks_remove(void);
 int audio_hooks_installed(void);

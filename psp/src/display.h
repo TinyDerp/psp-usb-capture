@@ -12,6 +12,7 @@ typedef struct {
 
 // Looks up the sceDisplay functions. Returns 0 if all were found.
 int display_init(void);
+int display_available(void);
 
 // The framebuffer that is (or will be at the next vblank) on screen.
 // Returns 0, or a negative sce error / -1 if display_init() failed.
@@ -29,7 +30,14 @@ void display_hook_remove(void);
 int display_hook_installed(void);
 void display_set_notify(int on);
 
-// Number of flips seen since the hook was installed.
+// Called by the session's bounded timer, not from a game syscall. Falls back
+// to framebuffer reads at up to 15 Hz if real flips have stalled for 250 ms.
+// Returns 1 when it published a new frame; real flips always take precedence.
+int display_poll_frame(void);
+int display_polling(void);
+
+// Number of real flips plus compatibility polling samples. While polling,
+// this counts samples, not the game's actual rendering rate.
 u32 display_flip_count(void);
 
 // The frame of the most recent flip and its flip number (1-based).

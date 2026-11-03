@@ -85,6 +85,9 @@ debugging tools like `--probe`, `--bench` and `--snapshot`).
 
 ## Troubleshooting
 
+For the PSP-1000/6.60 PRO-C2 zero-frame case, the changes and validation limits
+in this branch are described in [PSP-1000 compatibility](docs/psp1000-compatibility.md).
+
 - **"PSP not found"** — is a game running with the plugin, cable connected?
   Is RemoteJoyLite off? `seplugins/pspcap.log` on the Memory Stick tells
   whether the plugin started.

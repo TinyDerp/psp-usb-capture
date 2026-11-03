@@ -5,6 +5,7 @@
 #include <pspsdk.h>
 
 #include "audio.h"
+#include "capture_hooks.h"
 #include "display.h"
 #include "log.h"
 #include "session.h"
@@ -70,7 +71,7 @@ int module_start(SceSize args, void *argp)
 
     // As early as possible, so the hooks see the game reserve its audio
     // channels (they learn sample counts and formats from that).
-    audio_hooks_install(usb_wake);
+    capture_hooks_start();
 
     SceUID thid = sceKernelCreateThread("pspcap_main", main_thread, 0x20, 0x2000, 0, NULL);
     if (thid >= 0)
@@ -83,8 +84,7 @@ int module_stop(SceSize args, void *argp)
     (void)args;
     (void)argp;
 
-    audio_hooks_remove();
-    display_hook_remove();
+    capture_hooks_stop();
     usb_term();
     log_printf("pspcap stopped");
     return 0;

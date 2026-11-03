@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "audio.h"
+#include "capture_hooks.h"
 #include "display.h"
 #include "log.h"
 #include "pspcap_protocol.h"
@@ -578,7 +579,8 @@ static void send_stats(void)
     st.streaming = (u32)g_streaming;
     st.hooked = (display_hook_installed() ? PSPCAP_STATS_HOOKED : 0) |
                 (g_grab_buf ? PSPCAP_STATS_GRAB : 0) |
-                (audio_hooks_installed() ? PSPCAP_STATS_AUDIO : 0);
+                (audio_hooks_installed() ? PSPCAP_STATS_AUDIO : 0) |
+                (display_polling() ? PSPCAP_STATS_POLLING : 0);
     st.audio_sent = g_audio_sent;
     st.audio_dropped = audio_dropped();
     st.psp_time_us = now_us();
@@ -619,6 +621,8 @@ static void log_threads(void)
 
 static void stream_start(const pspcap_stream_request *req)
 {
+    // The game may have linked its imports since the plugin first started.
+    capture_hooks_refresh();
     if (req->flags & (PSPCAP_STREAM_DMA | PSPCAP_STREAM_GRAB))
         dmac_memcpy();
     int grab = (req->flags & PSPCAP_STREAM_GRAB) && grab_buffer();
@@ -743,7 +747,7 @@ static void handle_packet(int size)
             send_error(PSPCAP_ERR_BAD_PARAM, h->type);
             break;
         }
-        if (!display_hook_installed()) {
+        if (!display_available()) {
             send_error(PSPCAP_ERR_NO_FRAME, h->type);
             break;
         }
@@ -769,17 +773,27 @@ void session_run(int usb_speed)
     g_usb_speed = usb_speed;
 
     for (;;) {
-        int n = usb_recv_or_wake(&g_rx, sizeof(g_rx), CMD_TIMEOUT_US);
+        // Keep servicing video and audio even if no game syscall reaches our
+        // hooks. A bounded timer lets display_poll_frame recover that case.
+        int n = usb_recv_or_wake(&g_rx, sizeof(g_rx), g_streaming ? 16667 : CMD_TIMEOUT_US);
         if (n == USB_WOKEN) {
             if (g_streaming) {
+                display_poll_frame();
                 stream_audio();
                 stream_next();
                 stream_audio(); // what piled up while the frame was on the wire
             }
             continue;
         }
-        if (n == USB_ERR_TIMEOUT)
+        if (n == USB_ERR_TIMEOUT) {
+            if (g_streaming) {
+                display_poll_frame();
+                stream_audio();
+                stream_next();
+                stream_audio();
+            }
             continue;
+        }
         if (n == USB_ERR_DETACHED || !usb_attached()) {
             stream_stop("detached");
             return;

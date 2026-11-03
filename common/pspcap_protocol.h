@@ -179,6 +179,7 @@ typedef struct pspcap_stats {
 #define PSPCAP_STATS_HOOKED 0x1u /* the flip hook is installed */
 #define PSPCAP_STATS_GRAB   0x2u /* the full-frame grab buffer is allocated */
 #define PSPCAP_STATS_AUDIO  0x4u /* the audio hooks are installed */
+#define PSPCAP_STATS_POLLING 0x8u /* video uses timed framebuffer reads; flips counts samples */
 
 /* One block of sound as the game handed it to sceAudio: signed 16-bit
  * samples, interleaved L R when stereo. Sources are mixed on the PC. */

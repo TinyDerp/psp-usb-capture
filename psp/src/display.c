@@ -1,6 +1,7 @@
 #include "display.h"
 
 #include <pspsdk.h>
+#include <pspkernel.h>
 
 #include "systemctrl.h"
 
@@ -25,6 +26,14 @@ static void (*g_on_flip)(void);
 static volatile int g_notify;
 static display_frame g_latest;
 static u32 g_flips;
+static u64 g_last_hook_us;
+static u64 g_last_poll_us;
+static int g_saw_hook;
+static int g_saw_poll;
+static int g_polling;
+
+#define HOOK_STALL_US 250000u
+#define POLL_INTERVAL_US (1000000u / 15u)
 
 int display_init(void)
 {
@@ -33,6 +42,11 @@ int display_init(void)
     g_wait_vblank = (wait_vblank_fn)sctrlHENFindFunction(
         "sceDisplay_Service", "sceDisplay", NID_sceDisplayWaitVblankStart);
     return g_get_frame_buf && g_wait_vblank ? 0 : -1;
+}
+
+int display_available(void)
+{
+    return g_get_frame_buf && g_wait_vblank;
 }
 
 int display_get_frame(display_frame *frame)
@@ -72,6 +86,9 @@ static int hook_set_frame_buf(void *topaddr, int bufferwidth, int pixelformat, i
     g_latest.stride = bufferwidth;
     g_latest.pixel_format = pixelformat;
     g_flips++;
+    g_last_hook_us = sceKernelGetSystemTimeWide();
+    g_saw_hook = 1;
+    g_polling = 0;
     pspSdkEnableInterrupts(intr);
 
     if (g_notify && g_on_flip) {
@@ -95,6 +112,46 @@ int display_hook_install(void (*on_flip)(void))
     return 0;
 }
 
+// A resolved export does not prove that a game's syscall reaches our hook.
+// Some loaders link the game's imports after plugins have already started.
+// Poll the working framebuffer getter if no hook has run recently. This also
+// gives static screens an initial picture instead of an indefinitely black one.
+int display_poll_frame(void)
+{
+    if (!g_notify || !display_available())
+        return 0;
+    u64 now = sceKernelGetSystemTimeWide();
+    int intr = pspSdkDisableInterrupts();
+    int recent = g_saw_hook && now - g_last_hook_us < HOOK_STALL_US;
+    u32 observed = g_flips;
+    pspSdkEnableInterrupts(intr);
+    if (recent || (g_saw_poll && now - g_last_poll_us < POLL_INTERVAL_US))
+        return 0;
+    g_last_poll_us = now;
+    g_saw_poll = 1;
+    display_wait_vblank();
+    display_frame frame;
+    if (display_get_frame(&frame) < 0 || !frame.addr || frame.stride < 480 ||
+        frame.stride > 2048 || frame.pixel_format < 0 || frame.pixel_format > 3)
+        return 0;
+    intr = pspSdkDisableInterrupts();
+    // A real flip can arrive while waiting for vblank: prefer its newer frame.
+    if (g_flips != observed) {
+        pspSdkEnableInterrupts(intr);
+        return 0;
+    }
+    g_latest = frame;
+    g_flips++; // Keep frame IDs monotonic when real hooks resume.
+    g_polling = 1;
+    pspSdkEnableInterrupts(intr);
+    return 1;
+}
+
+int display_polling(void)
+{
+    return g_polling;
+}
+
 void display_hook_remove(void)
 {
     if (g_set_frame_buf)
@@ -110,6 +167,10 @@ int display_hook_installed(void)
 void display_set_notify(int on)
 {
     g_notify = on;
+    if (!on) {
+        g_saw_poll = 0;
+        g_polling = 0;
+    }
 }
 
 u32 display_flip_count(void)

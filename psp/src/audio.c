@@ -59,11 +59,14 @@ static u32 g_tail; // bytes read, ever
 static void ring_push(u32 source, int vol_left, int vol_right, const void *pcm)
 {
     const source_config *c = &g_src[source];
-    u32 bytes = c->samples * c->channels * 2;
-    if (!c->samples || bytes > MAX_BLOCK) {
+    // Validate before multiplying: stale/invalid reservations must not wrap
+    // the byte count and turn into an out-of-bounds read of the game's buffer.
+    if ((c->channels != 1 && c->channels != 2) || !c->rate || !c->samples ||
+        c->samples > MAX_BLOCK / (c->channels * 2)) {
         g_dropped++;
         return;
     }
+    u32 bytes = c->samples * c->channels * 2;
     u32 need = 4 + sizeof(pspcap_audio_info) + ((bytes + 3) & ~3u);
 
     int intr = pspSdkDisableInterrupts();
@@ -363,22 +366,21 @@ static const hook_entry g_hooks[] = {
 
 int audio_hooks_install(void (*on_data)(void))
 {
-    if (g_hooked)
-        return g_hooked;
-    // Resolve everything first: hook all or nothing.
-    u32 addr[HOOK_COUNT];
-    for (int i = 0; i < HOOK_COUNT; i++) {
-        addr[i] = sctrlHENFindFunction(AUDIO_MODULE, AUDIO_LIB, g_hooks[i].nid);
-        if (!addr[i])
-            return 0;
-    }
+    // Optional APIs are not exported by every firmware. Keep usable hooks
+    // and retry after later modules link their imports; PatchSyscall patches
+    // existing entries only, so an early successful lookup is insufficient.
+    int installed = 0;
     g_on_data = on_data;
     for (int i = 0; i < HOOK_COUNT; i++) {
-        *g_hooks[i].orig = (void *)addr[i];
-        sctrlHENPatchSyscall((void *)addr[i], g_hooks[i].hook);
+        u32 addr = sctrlHENFindFunction(AUDIO_MODULE, AUDIO_LIB, g_hooks[i].nid);
+        if (!addr)
+            continue;
+        *g_hooks[i].orig = (void *)addr;
+        sctrlHENPatchSyscall((void *)addr, g_hooks[i].hook);
+        g_hooked |= 1 << i;
+        installed++;
     }
-    g_hooked = HOOK_COUNT;
-    return g_hooked;
+    return installed;
 }
 
 void audio_hooks_remove(void)
@@ -386,8 +388,10 @@ void audio_hooks_remove(void)
     if (!g_hooked)
         return;
     g_capture = 0;
-    for (int i = 0; i < HOOK_COUNT; i++)
-        sctrlHENPatchSyscall(g_hooks[i].hook, *g_hooks[i].orig);
+    for (int i = 0; i < HOOK_COUNT; i++) {
+        if (g_hooked & (1 << i))
+            sctrlHENPatchSyscall(g_hooks[i].hook, *g_hooks[i].orig);
+    }
     g_hooked = 0;
 }
 
