@@ -24,7 +24,7 @@ if(MSVC)
 else()
     target_compile_options(capture_test PRIVATE -Wall -Wextra -UNDEBUG)
 endif()
-foreach(scenario polling pacing resume race disabled invalid_getter partial_audio
+foreach(scenario polling pacing deadlines resume race disabled invalid_getter partial_audio
         audio_retry audio_overflow audio_ring audio_unknown no_audio late_imports)
     add_test(NAME ${scenario} COMMAND capture_test ${scenario})
 endforeach()

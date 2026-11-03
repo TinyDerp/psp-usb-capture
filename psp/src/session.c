@@ -775,7 +775,8 @@ void session_run(int usb_speed)
     for (;;) {
         // Keep servicing video and audio even if no game syscall reaches our
         // hooks. A bounded timer lets display_poll_frame recover that case.
-        int n = usb_recv_or_wake(&g_rx, sizeof(g_rx), g_streaming ? 16667 : CMD_TIMEOUT_US);
+        int n = usb_recv_or_wake(&g_rx, sizeof(g_rx),
+                                 g_streaming ? display_poll_timeout_us() : CMD_TIMEOUT_US);
         if (n == USB_WOKEN) {
             if (g_streaming) {
                 display_poll_frame();

@@ -8,9 +8,12 @@ the game was visibly moving. Repeated snapshots produced a usable picture.
 This points to the frame notification path rather than a missing USB driver.
 It does not identify the firmware-specific cause conclusively.
 
-The original audio capture was not verified on that console. This branch
-addresses startup and missing-export cases that can prevent audio hooks
-from observing output; successful audio on the PSP-1004 still needs a test.
+The first compatibility build, `af57c78`, was tested on that console on
+2026-11-03. The user confirmed moving video and audible USB sound in the
+native Windows viewer. Its conservative 15 Hz polling cap yielded roughly
+13 FPS. This branch now targets up to 30 Hz and accounts for copy/transfer
+time when choosing the next wait. That higher-rate build still needs a
+hardware test; a target rate is not a guarantee of rendering or capture speed.
 
 ## Changes
 
@@ -19,7 +22,7 @@ from observing output; successful audio on the PSP-1004 still needs a test.
   entries; resolving an export before the game's imports are linked does not
   guarantee that subsequent game calls will reach the hook.
 - If no real display callback arrives for 250 ms, sample the framebuffer getter
-  at up to 15 Hz. A bounded receive timeout services this path even with zero
+  at up to 30 Hz. A deadline-based receive timeout services this path even with zero
   hook notifications. A real callback takes priority, and frame IDs remain
   monotonic when hooks resume. Static screens also get an initial picture.
 - Keep each available audio hook when another optional export is absent, and
@@ -57,8 +60,19 @@ actual plugin builds with the official PSP SDK using the existing workflow:
 make -C psp GIT_REV="$(git rev-parse --short HEAD)"
 ```
 
-Host tests and a cross-build do not establish PSP hardware stability. A test
-of the new plugin on the affected console is still required.
+Host tests and a cross-build do not establish PSP hardware stability. The
+first 15 Hz build has initial hardware confirmation; the higher-rate build
+still needs a test on the affected console.
+
+For a more conservative build, force a rebuild at a lower sampling target:
+
+```sh
+make -B -C psp POLL_FPS=15 GIT_REV="$(git rev-parse --short HEAD)"
+```
+
+Keep the 15 Hz build available for rollback when testing 30 Hz. A higher
+capture rate takes more of the PSP's CPU and USB bandwidth and may affect
+gameplay or sound. Compare all three, rather than relying only on the FPS label.
 
 ## Later hardware test
 

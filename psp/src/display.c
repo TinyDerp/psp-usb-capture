@@ -33,7 +33,14 @@ static int g_saw_poll;
 static int g_polling;
 
 #define HOOK_STALL_US 250000u
-#define POLL_INTERVAL_US (1000000u / 15u)
+#ifndef PSPCAP_POLL_FPS
+#define PSPCAP_POLL_FPS 30
+#endif
+#if PSPCAP_POLL_FPS < 1 || PSPCAP_POLL_FPS > 30
+#error "PSPCAP_POLL_FPS must be between 1 and 30"
+#endif
+#define POLL_INTERVAL_US (1000000u / PSPCAP_POLL_FPS)
+#define MAX_SERVICE_WAIT_US 16667u
 
 int display_init(void)
 {
@@ -150,6 +157,27 @@ int display_poll_frame(void)
 int display_polling(void)
 {
     return g_polling;
+}
+
+u32 display_poll_timeout_us(void)
+{
+    if (!g_notify || !display_available())
+        return MAX_SERVICE_WAIT_US;
+    u64 now = sceKernelGetSystemTimeWide();
+    int intr = pspSdkDisableInterrupts();
+    int recent = g_saw_hook && now - g_last_hook_us < HOOK_STALL_US;
+    pspSdkEnableInterrupts(intr);
+    if (recent)
+        return MAX_SERVICE_WAIT_US;
+    if (!g_saw_poll)
+        return 1;
+    // Copying and USB transfers have already consumed part (or all) of the
+    // interval. Do not add another fixed wait after every completed frame.
+    u64 elapsed = now - g_last_poll_us;
+    if (elapsed >= POLL_INTERVAL_US)
+        return 1;
+    u32 remaining = (u32)(POLL_INTERVAL_US - elapsed);
+    return remaining < MAX_SERVICE_WAIT_US ? remaining : MAX_SERVICE_WAIT_US;
 }
 
 void display_hook_remove(void)

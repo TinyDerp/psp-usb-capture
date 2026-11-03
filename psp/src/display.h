@@ -31,10 +31,15 @@ int display_hook_installed(void);
 void display_set_notify(int on);
 
 // Called by the session's bounded timer, not from a game syscall. Falls back
-// to framebuffer reads at up to 15 Hz if real flips have stalled for 250 ms.
+// to framebuffer reads at up to PSPCAP_POLL_FPS (default 30 Hz) if real flips
+// have stalled for 250 ms.
 // Returns 1 when it published a new frame; real flips always take precedence.
 int display_poll_frame(void);
 int display_polling(void);
+
+// Time left until the next polling deadline, accounting for time spent
+// copying/sending the last frame. At most 16.667 ms to keep audio serviced.
+u32 display_poll_timeout_us(void);
 
 // Number of real flips plus compatibility polling samples. While polling,
 // this counts samples, not the game's actual rendering rate.

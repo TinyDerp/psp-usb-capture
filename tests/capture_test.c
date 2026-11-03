@@ -221,8 +221,24 @@ int main(int argc, char **argv)
         display_init(); display_set_notify(1);
         assert(display_poll_frame() == 1);
         assert(display_poll_frame() == 0);
-        clock_us += 66667;
+        clock_us += 33333;
         assert(display_poll_frame() == 1 && display_flip_count() == 2);
+    } else if (strcmp(scenario, "deadlines") == 0) {
+        display_init();
+        assert(display_poll_timeout_us() == 16667);
+        display_set_notify(1);
+        assert(display_poll_timeout_us() == 1);
+        assert(display_poll_frame() == 1); // fake vblank consumes 16.667 ms
+        assert(display_poll_timeout_us() == 16666);
+        clock_us += 15000; // part of a frame copy/transfer
+        assert(display_poll_timeout_us() == 1666);
+        clock_us += 1666;
+        assert(display_poll_timeout_us() == 1); // deadline is due, no extra sleep
+        assert(display_poll_frame() == 1);
+        clock_us += 20000; // sending plus vblank exceeded the 33.333 ms interval
+        assert(display_poll_timeout_us() == 1);
+        display_set_notify(0);
+        assert(display_poll_timeout_us() == 16667);
     } else if (strcmp(scenario, "resume") == 0) {
         display_init(); display_hook_install(usb_wake); display_set_notify(1);
         flip(framebuffer.addr);
